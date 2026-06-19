@@ -17,7 +17,16 @@
     font-family: 'Orbitron', sans-serif; color: var(--gold);
     user-select: none; -webkit-user-select: none;
   }
-  #stage { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  /* Zone de jeu fixe en 4:3, calibrée pour un écran 1080p (1440x1080), centrée avec letterbox */
+  #stage {
+    position: relative; overflow: hidden;
+    aspect-ratio: 4 / 3;
+    height: min(100vh, 75vw, 1080px);
+    max-width: 1440px;
+    width: auto;
+    box-shadow: 0 0 40px rgba(79,214,255,0.12);
+  }
   canvas { display: block; position: absolute; inset: 0; }
 
   /* ---------- Écrans superposés ---------- */
@@ -286,11 +295,13 @@
   (window.METEOR_SPRITES || []).forEach(s => { const i = new Image(); i.src = s.uri; meteorImgs.push(i); });
 
   /* ================= CANVAS ================= */
+  const stage = document.getElementById("stage");
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
   let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
   function resize() {
-    W = window.innerWidth; H = window.innerHeight;
+    const r = stage.getBoundingClientRect();
+    W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
     canvas.width = W*DPR; canvas.height = H*DPR;
     canvas.style.width = W+"px"; canvas.style.height = H+"px";
     ctx.setTransform(DPR,0,0,DPR,0,0);
