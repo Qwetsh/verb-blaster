@@ -428,8 +428,11 @@
     player.x = Math.max(player.dw/2, Math.min(W-player.dw/2, player.x));
     player.y = Math.max(H*0.42, Math.min(H-player.dh/2-10, player.y));
 
-    spawnTimer++; spawnDelay = Math.max(34, 80-gameTime/120);
-    if (spawnTimer>=spawnDelay){ spawnTimer=0; spawnEnemy(); }
+    // densite maitrisee : plafond de meteorites a l'ecran (monte de 3 a 7) + cadence qui s'accelere doucement
+    spawnTimer++;
+    const maxOnScreen = Math.min(7, 3 + Math.floor(gameTime/1800));   // +1 toutes les ~30 s
+    spawnDelay = Math.max(55, 130 - gameTime/90);
+    if (spawnTimer>=spawnDelay && enemies.length < maxOnScreen){ spawnTimer=0; spawnEnemy(); }
 
     for(const b of bullets) b.y+=b.vy;
     bullets = bullets.filter(b=>b.y>-20);
