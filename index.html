@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VERB BLASTER — Irregular Strike</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=VT323&display=swap');
+
+  :root {
+    --gold: #ffe81f; --gold-dim: #c9b400; --cyan: #4fd6ff;
+    --red: #ff3b3b; --green: #44ff88;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; background: #000; overflow: hidden;
+    font-family: 'Orbitron', sans-serif; color: var(--gold);
+    user-select: none; -webkit-user-select: none;
+  }
+  #stage { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  canvas { display: block; position: absolute; inset: 0; }
+
+  /* ---------- Écrans superposés ---------- */
+  .screen {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; z-index: 10; padding: 4vh 6vw;
+  }
+  .screen.active { display: flex; }
+
+  .title {
+    font-weight: 900; font-size: clamp(2.4rem, 8vw, 6rem); letter-spacing: 0.08em;
+    color: var(--gold); text-shadow: 0 0 18px rgba(255,232,31,0.55), 0 0 40px rgba(255,232,31,0.25);
+    line-height: 0.95;
+  }
+  .subtitle {
+    font-size: clamp(0.9rem, 2.6vw, 1.4rem); color: var(--cyan); letter-spacing: 0.35em;
+    margin-top: 0.6rem; text-shadow: 0 0 10px rgba(79,214,255,0.5);
+  }
+  .menu { margin-top: 3rem; display: flex; flex-direction: column; gap: 1rem; width: min(340px, 80vw); }
+
+  .btn {
+    font-family: 'Orbitron', sans-serif; font-weight: 700;
+    font-size: clamp(1rem, 2.4vw, 1.3rem); letter-spacing: 0.15em; padding: 0.9rem 1.4rem;
+    color: var(--gold); background: rgba(255,232,31,0.04); border: 2px solid var(--gold-dim);
+    border-radius: 4px; cursor: pointer; transition: all 0.12s ease; text-transform: uppercase;
+  }
+  .btn:hover, .btn:focus {
+    color: #000; background: var(--gold); box-shadow: 0 0 24px rgba(255,232,31,0.6);
+    outline: none; transform: translateY(-1px);
+  }
+  .btn.secondary { font-size: clamp(0.8rem,2vw,1rem); border-color: #555; color: #bbb; }
+  .btn.secondary:hover { background: #ddd; color:#000; box-shadow:none; }
+
+  .panel {
+    background: rgba(8,10,20,0.85); border: 2px solid var(--gold-dim); border-radius: 6px;
+    padding: 2rem 2.4rem; width: min(560px, 90vw); box-shadow: 0 0 40px rgba(255,232,31,0.12);
+  }
+  .panel h2 { font-size: clamp(1.4rem, 4vw, 2.2rem); letter-spacing: 0.2em; margin-bottom: 1.4rem; color: var(--gold); }
+  .panel p, .panel li { font-family:'VT323', monospace; font-size: clamp(1.05rem,2.6vw,1.4rem); color:#d8d8d8; line-height:1.5; }
+  .good { color: var(--green); } .bad { color: var(--red); }
+
+  .scores-list { font-family:'VT323', monospace; font-size: clamp(1.1rem,3vw,1.6rem); text-align:left; width:fit-content; margin:0 auto; }
+  .scores-list .row { display:flex; justify-content:space-between; gap:2.5rem; color:#eee; }
+  .scores-list .row .rank { color: var(--gold); }
+  .scores-list .row.me { color: var(--cyan); text-shadow:0 0 8px rgba(79,214,255,0.6); }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position:absolute; top:0; left:0; right:0; display:none; justify-content:space-between;
+    align-items:center; padding: 0.8rem 1.4rem; z-index: 9; font-family:'VT323', monospace;
+    font-size: clamp(1.1rem, 3vw, 1.7rem); pointer-events:none; text-shadow: 0 0 8px rgba(0,0,0,0.9);
+  }
+  #hud.active { display:flex; }
+  #hud .lives { color: var(--red); letter-spacing:0.1em; }
+  #hud .score { color: var(--gold); }
+  #hud .combo { color: var(--cyan); font-size:0.8em; }
+  #flash {
+    position:absolute; top:18%; left:50%; transform:translateX(-50%); font-family:'Orbitron';
+    font-weight:900; font-size: clamp(1.4rem,5vw,2.6rem); z-index:9; pointer-events:none;
+    opacity:0; text-shadow:0 0 18px currentColor;
+  }
+
+  /* ---------- Crawl ---------- */
+  #crawl-wrap { position:absolute; inset:0; display:none; z-index:11; align-items:flex-end; justify-content:center; perspective: 380px; overflow:hidden; }
+  #crawl-wrap.active { display:flex; }
+  #crawl { width: min(680px, 86vw); color: var(--gold); font-family:'Orbitron', sans-serif; font-weight:700; text-align:center; transform-origin: 50% 100%; transform: rotateX(28deg); animation: crawl 11s linear forwards; }
+  #crawl h3 { font-size: clamp(1.4rem,4vw,2.2rem); letter-spacing:0.2em; margin-bottom:1.2rem; }
+  #crawl p { font-size: clamp(1rem,3vw,1.5rem); line-height:1.6; margin-bottom:1rem; }
+  @keyframes crawl {
+    0% { top: 100%; transform: rotateX(28deg) translateY(120vh); opacity:1; }
+    92% { opacity:1; } 100% { transform: rotateX(28deg) translateY(-260vh); opacity:0; }
+  }
+  #skip { position:absolute; bottom:4vh; right:4vw; z-index:12; }
+
+  .hint { margin-top:2rem; font-family:'VT323',monospace; font-size:clamp(0.9rem,2.4vw,1.2rem); color:#888; letter-spacing:0.1em; }
+  .footer-credit { position:absolute; bottom:1.2rem; font-family:'VT323',monospace; color:#555; font-size:0.95rem; letter-spacing:0.15em; }
+  .legend { display:flex; gap:2rem; margin-top:1.4rem; font-family:'VT323',monospace; font-size:clamp(0.95rem,2.6vw,1.3rem); flex-wrap:wrap; justify-content:center; }
+  .legend .irr { color: var(--red); } .legend .reg { color: var(--green); }
+
+  .toggle { margin-top:1.6rem; font-family:'VT323',monospace; font-size:clamp(1rem,2.6vw,1.3rem); color:#aaa; cursor:pointer; letter-spacing:0.08em; }
+  .toggle b { color: var(--cyan); }
+
+  /* ---------- Sélection de vaisseau (versus) ---------- */
+  #screen-select { justify-content:flex-start; padding-top:3vh; }
+  #screen-select h2 { font-size: clamp(1.3rem,4vw,2rem); letter-spacing:0.25em; color:var(--gold); text-shadow:0 0 14px rgba(255,232,31,0.4); }
+  .select-stage { display:flex; align-items:center; justify-content:center; gap:clamp(1rem,4vw,3rem); margin-top:2vh; width:100%; max-width:920px; flex-wrap:wrap; }
+  .hero {
+    width:min(320px,42vw); aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at center, rgba(79,214,255,0.12), transparent 65%);
+    border:2px solid var(--gold-dim); border-radius:8px; position:relative; overflow:hidden;
+  }
+  .hero::before { content:""; position:absolute; inset:0; background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); pointer-events:none; }
+  .hero img { max-width:74%; max-height:82%; filter: drop-shadow(0 0 18px rgba(79,214,255,0.5)); animation:hover 3s ease-in-out infinite; }
+  @keyframes hover { 0%,100%{transform:translateY(-6px)} 50%{transform:translateY(8px)} }
+  .info { text-align:left; width:min(320px,44vw); }
+  .info .sname { font-size:clamp(1.4rem,4vw,2.2rem); font-weight:900; color:var(--gold); letter-spacing:0.08em; }
+  .info .sdesc { font-family:'VT323',monospace; font-size:clamp(1rem,2.6vw,1.35rem); color:#bcd; margin:0.4rem 0 1rem; line-height:1.35; }
+  .stat { display:flex; align-items:center; gap:0.6rem; margin:0.45rem 0; font-family:'VT323',monospace; font-size:clamp(0.95rem,2.4vw,1.25rem); color:#ddd; }
+  .stat .lab { width:88px; color:#9ab; text-transform:uppercase; letter-spacing:0.06em; }
+  .bar { flex:1; height:12px; background:rgba(255,255,255,0.08); border:1px solid #445; border-radius:6px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:linear-gradient(90deg,var(--cyan),var(--gold)); }
+
+  .thumbs { display:flex; gap:0.7rem; margin-top:2.4vh; flex-wrap:wrap; justify-content:center; max-width:780px; }
+  .thumb {
+    width:clamp(64px,10vw,92px); height:clamp(64px,10vw,92px); border:2px solid #334; border-radius:6px;
+    background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:all 0.12s; padding:6px;
+  }
+  .thumb img { max-width:100%; max-height:100%; }
+  .thumb:hover { border-color:#778; }
+  .thumb.sel { border-color:var(--gold); box-shadow:0 0 16px rgba(255,232,31,0.55); background:rgba(255,232,31,0.07); }
+  .select-actions { display:flex; gap:1rem; margin-top:2.6vh; flex-wrap:wrap; justify-content:center; }
+  .select-hint { margin-top:1.2vh; font-family:'VT323',monospace; color:#778; font-size:clamp(0.85rem,2.2vw,1.1rem); letter-spacing:0.08em; }
+
+  #over input {
+    margin-top:0.6rem; background:#000; border:2px solid var(--gold); color:var(--gold);
+    font-family:'Orbitron'; font-size:1.6rem; text-align:center; width:160px; padding:0.4rem;
+    text-transform:uppercase; letter-spacing:0.2em;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="lives" id="hud-lives">♥ ♥ ♥</div>
+    <div class="score">SCORE <span id="hud-score">0</span></div>
+    <div class="combo" id="hud-combo"></div>
+  </div>
+  <div id="flash"></div>
+
+  <!-- LANDING -->
+  <section class="screen active" id="screen-menu">
+    <h1 class="title">VERB<br>BLASTER</h1>
+    <p class="subtitle">★ IRREGULAR&nbsp;STRIKE ★</p>
+    <div class="legend">
+      <span class="irr">▲ IRREGULIER : DÉTRUIRE</span>
+      <span class="reg">● REGULIER : LAISSER PASSER</span>
+    </div>
+    <nav class="menu">
+      <button class="btn" id="btn-play">▶ Nouvelle partie</button>
+      <button class="btn secondary" id="btn-scores">Meilleurs scores</button>
+      <button class="btn secondary" id="btn-credits">Crédits</button>
+    </nav>
+    <div class="toggle" id="hint-toggle">Indices couleur (mode facile) : <b id="hint-state">OFF</b> &nbsp;(clic pour changer)</div>
+    <p class="hint">Flèches / Q-D pour bouger &nbsp;·&nbsp; ESPACE pour tirer</p>
+    <div class="footer-credit">© ARCADE GALACTIQUE — INSERT COIN</div>
+  </section>
+
+  <!-- SÉLECTION VAISSEAU -->
+  <section class="screen" id="screen-select">
+    <h2>★ CHOISIS TON CHASSEUR ★</h2>
+    <div class="select-stage">
+      <div class="hero"><img id="hero-img" alt="vaisseau"></div>
+      <div class="info">
+        <div class="sname" id="sel-name">—</div>
+        <div class="sdesc" id="sel-desc"></div>
+        <div class="stat"><span class="lab">Vitesse</span><span class="bar"><i id="st-speed"></i></span></div>
+        <div class="stat"><span class="lab">Cadence</span><span class="bar"><i id="st-fire"></i></span></div>
+        <div class="stat"><span class="lab">Blindage</span><span class="bar"><i id="st-hull"></i></span></div>
+      </div>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="select-actions">
+      <button class="btn" id="btn-launch">▶ Décoller</button>
+      <button class="btn secondary" id="btn-select-back">◁ Retour</button>
+    </div>
+    <p class="select-hint">◀ ▶ pour parcourir &nbsp;·&nbsp; ENTRÉE pour valider</p>
+  </section>
+
+  <!-- CRAWL -->
+  <div id="crawl-wrap">
+    <div id="crawl">
+      <h3>ÉPISODE IV — IRREGULAR STRIKE</h3>
+      <p>L'Empire des verbes a envahi la galaxie. Des champs d'astéroïdes
+      portent des verbes <b>IRRÉGULIERS</b> menaçant la grammaire libre.</p>
+      <p>À bord de ton chasseur, <b>pulvérise les astéroïdes IRRÉGULIERS</b>
+      et <b>laisse filer les RÉGULIERS</b>. Surtout : ne percute aucun rocher,
+      ta coque n'y survivrait pas.</p>
+      <p>Méfie-toi : tirer sur un verbe régulier déclenche une pluie de
+      missiles tout autour de toi. Que la conjugaison soit avec toi.</p>
+    </div>
+    <button class="btn secondary" id="skip">Passer ▷</button>
+  </div>
+
+  <!-- SCORES -->
+  <section class="screen" id="screen-scores">
+    <div class="panel">
+      <h2>★ HALL OF FAME ★</h2>
+      <div class="scores-list" id="scores-list"></div>
+      <button class="btn secondary" id="btn-scores-back" style="margin-top:2rem">◁ Retour</button>
+    </div>
+  </section>
+
+  <!-- CREDITS -->
+  <section class="screen" id="screen-credits">
+    <div class="panel">
+      <h2>CRÉDITS</h2>
+      <p>VERB BLASTER — Irregular Strike</p>
+      <p style="margin-top:1rem; color:#9aa;">Un shoot-them-up pédagogique<br>pour réviser les verbes irréguliers anglais.</p>
+      <p style="margin-top:1.2rem; font-size:1.1rem; color:#777;">Code &amp; design : Charles (qwetsh)<br>Moteur : Canvas 2D — zéro dépendance</p>
+      <p style="margin-top:1.2rem; color:#556;">Hommage galactique à une saga lointaine, très lointaine.</p>
+      <button class="btn secondary" id="btn-credits-back" style="margin-top:2rem">◁ Retour</button>
+    </div>
+  </section>
+
+  <!-- GAME OVER -->
+  <section class="screen" id="over">
+    <div class="panel">
+      <h2 id="over-title">GAME OVER</h2>
+      <p>Score final</p>
+      <p style="font-size:2.4rem; color:var(--gold); margin:0.4rem 0 0.2rem;"><span id="over-score">0</span></p>
+      <p id="over-best" style="color:var(--cyan)"></p>
+      <p style="margin-top:1rem; color:#9aa;">Précision : <span id="over-acc">0%</span></p>
+      <div id="over-name-wrap" style="margin-top:1.4rem; display:none;">
+        <p class="good">★ NOUVEAU RECORD ! Entre tes initiales :</p>
+        <input id="over-name" maxlength="6" placeholder="AAA">
+      </div>
+      <div style="display:flex; gap:1rem; margin-top:1.8rem; justify-content:center; flex-wrap:wrap;">
+        <button class="btn" id="btn-retry">▶ Rejouer</button>
+        <button class="btn secondary" id="btn-change">Changer de vaisseau</button>
+        <button class="btn secondary" id="btn-menu">Menu</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="sprites.js"></script>
+<script>
+"use strict";
+(function () {
+  /* ================= VERBES ================= */
+  const IRREGULAR = ["go","eat","drink","run","swim","fly","take","make","see","come",
+    "give","find","think","know","write","read","speak","drive","sleep","sing","ring",
+    "begin","break","choose","bring","buy","catch","teach","win","lose","sell","tell",
+    "feel","keep","leave","meet","pay","say","send","sit","stand","wear","get","have",
+    "do","be","build","cut","draw","fall","forget","grow","hide","hold","hurt","lead",
+    "mean","put","throw","wake","hear","fight","freeze","ride","shake","steal","swear"];
+  const REGULAR = ["work","play","talk","walk","look","watch","listen","like","love",
+    "want","need","help","call","ask","answer","open","close","clean","cook","dance",
+    "jump","learn","live","move","paint","push","pull","smile","start","stop","study",
+    "travel","turn","use","visit","wait","wash","finish","fix","climb","count","enjoy",
+    "fill","kick","laugh","miss","point","share","shout","touch","try","type","cross"];
+
+  /* ================= VAISSEAUX (ordre du sprite sheet) ================= */
+  const SHIPS = [
+    { name:"GOLD ARROW",   desc:"Chasseur polyvalent. Le bon élève.",        speed:7.0, cooldown:10, lives:3 },
+    { name:"PALE GHOST",   desc:"Intercepteur rapide, coque légère.",        speed:8.6, cooldown:11, lives:2 },
+    { name:"TWIN BARGE",   desc:"Lourd et blindé, cadence d'enfer.",         speed:5.6, cooldown:7,  lives:4 },
+    { name:"CRIMSON FANG", desc:"Agressif, gâchette facile.",                speed:7.6, cooldown:8,  lives:3 },
+    { name:"AZURE TRIDENT",desc:"Équilibré, stable en manœuvre.",            speed:7.0, cooldown:9,  lives:3 },
+    { name:"DUNE RUNNER",  desc:"Increvable des confins, sans excès.",       speed:6.5, cooldown:9,  lives:3 },
+    { name:"JADE HAWK",    desc:"Souple et précis, le tireur d'élite.",      speed:7.2, cooldown:10, lives:3 },
+    { name:"VOID REAPER",  desc:"Furtif et vif, mais fragile.",              speed:8.2, cooldown:8,  lives:2 },
+  ];
+  let selectedShip = 0;
+  let colorHints = false;   // pas d'indice couleur par défaut : il faut reconnaître le verbe
+
+  /* ================= PRÉCHARGEMENT SPRITES ================= */
+  const shipImgs = [], meteorImgs = [];
+  (window.SHIP_SPRITES || []).forEach(s => { const i = new Image(); i.src = s.uri; shipImgs.push(i); });
+  (window.METEOR_SPRITES || []).forEach(s => { const i = new Image(); i.src = s.uri; meteorImgs.push(i); });
+
+  /* ================= CANVAS ================= */
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W*DPR; canvas.height = H*DPR;
+    canvas.style.width = W+"px"; canvas.style.height = H+"px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize", resize); resize();
+
+  /* ================= ÉTOILES ================= */
+  let stars = [];
+  function initStars() {
+    stars = []; const n = Math.floor((W*H)/6000);
+    for (let i=0;i<n;i++) stars.push({ x:Math.random()*W, y:Math.random()*H, z:Math.random()*0.8+0.2 });
+  }
+  initStars(); window.addEventListener("resize", initStars);
+
+  /* ================= ÉTAT ================= */
+  const STATE = { MENU:"menu", SELECT:"select", CRAWL:"crawl", PLAY:"play", OVER:"over" };
+  let state = STATE.MENU;
+
+  const player = { x:0, y:0, dw:54, dh:54, hw:18, hh:20, speed:7, cooldown:0 };
+  let bullets=[], enemies=[], hazards=[], particles=[];
+  let score=0, lives=3, combo=0, comboTimer=0;
+  let spawnTimer=0, spawnDelay=80, gameTime=0;
+  let shotsFired=0, irregularKilled=0, invuln=0;
+
+  const keys={};
+  window.addEventListener("keydown", (e)=>{
+    const k=e.key.toLowerCase(); keys[k]=true;
+    if ([" ","arrowleft","arrowright","arrowup","arrowdown"].includes(k)) e.preventDefault();
+    if (e.key===" " && state===STATE.PLAY) shoot();
+    if (state===STATE.SELECT) {
+      if (k==="arrowleft") selectShip((selectedShip+SHIPS.length-1)%SHIPS.length);
+      else if (k==="arrowright") selectShip((selectedShip+1)%SHIPS.length);
+      else if (k==="enter") launchFromSelect();
+    }
+  });
+  window.addEventListener("keyup", (e)=>{ keys[e.key.toLowerCase()]=false; });
+
+  /* ================= AUDIO ================= */
+  let actx=null;
+  function audio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+  function beep(freq,dur,type,vol){
+    const a=audio(); if(!a) return;
+    const o=a.createOscillator(), g=a.createGain();
+    o.type=type||"square"; o.frequency.value=freq; g.gain.value=(vol==null?0.06:vol);
+    o.connect(g); g.connect(a.destination);
+    const t=a.currentTime; o.start(t);
+    g.gain.setValueAtTime(g.gain.value,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*0.5),t+dur); o.stop(t+dur);
+  }
+
+  /* ================= ACTIONS ================= */
+  function shoot(){
+    if (player.cooldown>0) return;
+    player.cooldown = SHIPS[selectedShip].cooldown;
+    shotsFired++;
+    bullets.push({ x:player.x, y:player.y-player.dh/2, vy:-12, r:4 });
+    beep(880,0.08,"square",0.05);
+  }
+
+  function spawnEnemy(){
+    const irregular = Math.random()<0.5;
+    const list = irregular ? IRREGULAR : REGULAR;
+    const word = list[(Math.random()*list.length)|0];
+    ctx.font = "700 18px Orbitron, sans-serif";
+    const tw = ctx.measureText(word).width;
+    const sprite = (Math.random()*Math.max(1,meteorImgs.length))|0;
+    const img = meteorImgs[sprite];
+    const ratio = (img && img.height) ? img.width/img.height : 1;
+    const targetW = Math.max(tw+52, 96) + Math.random()*16;
+    const w = targetW, h = w/ratio;
+    const x = Math.random()*(W - w - 40) + w/2 + 20;
+    const speed = 0.7 + gameTime/3600*0.8 + Math.random()*0.5;
+    const spin = (Math.random()-0.5)*0.01;
+    enemies.push({ x, y:-h, w, h, word, irregular, speed, sprite, rot:Math.random()*6.28, spin, hit:false });
+  }
+
+  function flash(text,color){
+    const el=document.getElementById("flash");
+    el.textContent=text; el.style.color=color;
+    el.style.transition="none"; el.style.opacity="1";
+    el.style.transform="translateX(-50%) scale(1.1)";
+    requestAnimationFrame(()=>{
+      el.style.transition="opacity 0.9s ease, transform 0.9s ease";
+      el.style.opacity="0"; el.style.transform="translateX(-50%) scale(0.85) translateY(-20px)";
+    });
+  }
+  function explode(x,y,color,n){
+    for(let i=0;i<(n||16);i++){ const a=Math.random()*6.28, s=Math.random()*4+1;
+      particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:30+Math.random()*20,color}); }
+  }
+  function radialBurst(x,y){
+    const n=16;
+    for(let i=0;i<n;i++){ const a=(i/n)*6.28;
+      hazards.push({x,y,vx:Math.cos(a)*3.4,vy:Math.sin(a)*3.4,r:5,life:220}); }
+    beep(120,0.4,"sawtooth",0.08); explode(x,y,"#ff7b3b",26);
+  }
+  function addScore(n){ score=Math.max(0,score+n); }
+  function loseLife(reason){
+    if (invuln>0) return;
+    lives--; invuln=90;
+    explode(player.x,player.y,"#ff3b3b",30); beep(90,0.5,"sawtooth",0.1);
+    if (reason) flash(reason,"#ff3b3b");
+    if (lives<=0) gameOver();
+  }
+
+  /* ================= UPDATE ================= */
+  function update(){
+    gameTime++;
+    for(const s of stars){ s.y += s.z*1.4; if(s.y>H){ s.y=0; s.x=Math.random()*W; } }
+    if (state!==STATE.PLAY) return;
+
+    if (player.cooldown>0) player.cooldown--;
+    if (invuln>0) invuln--;
+    if (comboTimer>0){ comboTimer--; if(comboTimer===0) combo=0; }
+
+    let dx=0,dy=0;
+    if (keys["arrowleft"]||keys["q"]||keys["a"]) dx-=1;
+    if (keys["arrowright"]||keys["d"]) dx+=1;
+    if (keys["arrowup"]||keys["z"]||keys["w"]) dy-=1;
+    if (keys["arrowdown"]||keys["s"]) dy+=1;
+    player.x += dx*player.speed; player.y += dy*player.speed;
+    player.x = Math.max(player.dw/2, Math.min(W-player.dw/2, player.x));
+    player.y = Math.max(H*0.42, Math.min(H-player.dh/2-10, player.y));
+
+    spawnTimer++; spawnDelay = Math.max(34, 80-gameTime/120);
+    if (spawnTimer>=spawnDelay){ spawnTimer=0; spawnEnemy(); }
+
+    for(const b of bullets) b.y+=b.vy;
+    bullets = bullets.filter(b=>b.y>-20);
+
+    for(const e of enemies){
+      e.y += e.speed; e.rot += e.spin;
+      // tir / météorite
+      for(const b of bullets){
+        if (b.y<0) continue;
+        if (Math.abs(b.x-e.x) < e.w*0.42+b.r && Math.abs(b.y-e.y) < e.h*0.42+b.r){
+          b.dead=true; e.hit=true;
+          if (e.irregular){
+            combo++; comboTimer=180; const gain=100+(combo-1)*20;
+            addScore(gain); irregularKilled++;
+            explode(e.x,e.y,"#ffe81f",18); beep(660+combo*40,0.12,"square",0.06);
+            if (combo>=3) flash("COMBO x"+combo+"  +"+gain,"#4fd6ff");
+          } else {
+            combo=0; addScore(-150); radialBurst(e.x,e.y);
+            flash("RÉGULIER !  -150","#ff3b3b");
+          }
+          break;
+        }
+      }
+      // collision météorite / joueur  -> -1 PV quel que soit le type
+      if (!e.hit && invuln<=0){
+        if (Math.abs(e.x-player.x) < e.w*0.40+player.hw && Math.abs(e.y-player.y) < e.h*0.40+player.hh){
+          e.hit=true; explode(e.x,e.y,"#ff9b3b",16);
+          loseLife("IMPACT ! "+e.word.toUpperCase());
+        }
+      }
+    }
+    bullets = bullets.filter(b=>!b.dead);
+
+    // sorties bas
+    for(const e of enemies){
+      if (e.y - e.h/2 > H && !e.hit){
+        if (e.irregular){ addScore(-50); combo=0; flash("RATÉ : "+e.word.toUpperCase(),"#ff8c3b"); beep(160,0.25,"triangle",0.05); }
+        else { addScore(20); }
+      }
+    }
+    enemies = enemies.filter(e=>!e.hit && e.y-e.h/2<=H);
+
+    for(const hz of hazards){
+      hz.x+=hz.vx; hz.y+=hz.vy; hz.life--;
+      if (Math.abs(hz.x-player.x)<player.hw && Math.abs(hz.y-player.y)<player.hh){ hz.life=0; loseLife(); }
+    }
+    hazards = hazards.filter(h=>h.life>0 && h.x>-30 && h.x<W+30 && h.y>-30 && h.y<H+30);
+
+    for(const p of particles){ p.x+=p.vx; p.y+=p.vy; p.vx*=0.96; p.vy*=0.96; p.life--; }
+    particles = particles.filter(p=>p.life>0);
+
+    updateHUD();
+  }
+
+  /* ================= RENDU ================= */
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(const s of stars){ ctx.globalAlpha=s.z; ctx.fillStyle="#fff"; const sz=s.z*1.8; ctx.fillRect(s.x,s.y,sz,sz); }
+    ctx.globalAlpha=1;
+
+    if (state===STATE.PLAY || state===STATE.OVER){
+      for(const e of enemies) drawMeteor(e);
+      ctx.fillStyle="#ffe81f";
+      for(const b of bullets){ ctx.shadowColor="#ffe81f"; ctx.shadowBlur=10; ctx.fillRect(b.x-2,b.y-9,4,14); }
+      ctx.shadowBlur=0;
+      for(const hz of hazards){ ctx.fillStyle="#ff5b2b"; ctx.shadowColor="#ff5b2b"; ctx.shadowBlur=12;
+        ctx.beginPath(); ctx.arc(hz.x,hz.y,hz.r,0,6.28); ctx.fill(); }
+      ctx.shadowBlur=0;
+      for(const p of particles){ ctx.globalAlpha=Math.max(0,p.life/50); ctx.fillStyle=p.color; ctx.fillRect(p.x-1.5,p.y-1.5,3,3); }
+      ctx.globalAlpha=1;
+      if (state===STATE.PLAY) drawPlayer();
+    }
+  }
+
+  function drawPlayer(){
+    if (invuln>0 && Math.floor(invuln/6)%2===0) return;
+    const img = shipImgs[selectedShip];
+    const x=player.x, y=player.y;
+    // réacteur (sous le vaisseau, vers le bas)
+    ctx.fillStyle="rgba(255,150,50,"+(0.5+Math.random()*0.4)+")";
+    ctx.beginPath(); ctx.moveTo(x-6,y+player.dh*0.34); ctx.lineTo(x+6,y+player.dh*0.34);
+    ctx.lineTo(x,y+player.dh*0.5+Math.random()*10); ctx.closePath(); ctx.fill();
+    if (img && img.complete && img.naturalWidth){
+      ctx.save();
+      ctx.translate(x,y); ctx.scale(1,-1);   // retourne : nez vers le haut
+      ctx.shadowColor="rgba(79,214,255,0.5)"; ctx.shadowBlur=12;
+      ctx.drawImage(img, -player.dw/2, -player.dh/2, player.dw, player.dh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle="#dfe7ff"; ctx.beginPath();
+      ctx.moveTo(x,y-20); ctx.lineTo(x+15,y+15); ctx.lineTo(x-15,y+15); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  function drawMeteor(e){
+    const img = meteorImgs[e.sprite];
+    ctx.save(); ctx.translate(e.x,e.y);
+    if (colorHints){
+      ctx.shadowColor = e.irregular ? "rgba(255,60,60,0.95)" : "rgba(70,255,140,0.9)";
+      ctx.shadowBlur = 22;
+    }
+    if (img && img.complete && img.naturalWidth){
+      ctx.save(); ctx.rotate(e.rot);
+      ctx.drawImage(img, -e.w/2, -e.h/2, e.w, e.h);
+      ctx.restore();
+    } else {
+      ctx.fillStyle="#7a7468"; ctx.beginPath(); ctx.arc(0,0,e.w*0.4,0,6.28); ctx.fill();
+    }
+    ctx.shadowBlur=0;
+    // halo sous le texte pour lisibilité
+    const fs = Math.max(15, Math.min(22, e.w*0.20));
+    ctx.font = "700 "+fs+"px Orbitron, sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.lineWidth=4; ctx.strokeStyle="rgba(0,0,0,0.85)";
+    ctx.strokeText(e.word, 0, 1);
+    ctx.fillStyle = colorHints ? (e.irregular ? "#ffd7d7" : "#d7ffe6") : "#ffffff";
+    ctx.fillText(e.word, 0, 1);
+    ctx.restore();
+  }
+
+  function loop(){ update(); draw(); requestAnimationFrame(loop); }
+
+  /* ================= HUD ================= */
+  function updateHUD(){
+    document.getElementById("hud-score").textContent=score;
+    document.getElementById("hud-lives").textContent = lives>0 ? ("♥ ".repeat(lives).trim()) : "—";
+    document.getElementById("hud-combo").textContent = combo>=2 ? ("COMBO x"+combo) : "";
+  }
+
+  /* ================= ÉCRANS ================= */
+  function show(id){
+    document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+    if (id) document.getElementById(id).classList.add("active");
+  }
+  function setHUD(on){ document.getElementById("hud").classList.toggle("active",on); }
+
+  /* ----- sélection vaisseau ----- */
+  function buildThumbs(){
+    const wrap=document.getElementById("thumbs"); wrap.innerHTML="";
+    SHIPS.forEach((s,i)=>{
+      const d=document.createElement("div"); d.className="thumb"+(i===selectedShip?" sel":"");
+      const im=document.createElement("img");
+      if (window.SHIP_SPRITES && window.SHIP_SPRITES[i]) im.src=window.SHIP_SPRITES[i].uri;
+      d.appendChild(im);
+      d.addEventListener("click",()=>{ selectShip(i); });
+      d.addEventListener("dblclick",()=>{ selectShip(i); launchFromSelect(); });
+      wrap.appendChild(d);
+    });
+  }
+  function selectShip(i){
+    selectedShip=i;
+    const s=SHIPS[i];
+    if (window.SHIP_SPRITES && window.SHIP_SPRITES[i]) document.getElementById("hero-img").src=window.SHIP_SPRITES[i].uri;
+    document.getElementById("sel-name").textContent=s.name;
+    document.getElementById("sel-desc").textContent=s.desc;
+    document.getElementById("st-speed").style.width=Math.round((s.speed-5)/4*100)+"%";
+    document.getElementById("st-fire").style.width=Math.round((14-s.cooldown)/8*100)+"%";
+    document.getElementById("st-hull").style.width=Math.round(s.lives/4*100)+"%";
+    document.querySelectorAll("#thumbs .thumb").forEach((t,j)=>t.classList.toggle("sel",j===selectedShip));
+  }
+  function openSelect(){ state=STATE.SELECT; show("screen-select"); buildThumbs(); selectShip(selectedShip); audio(); }
+  function launchFromSelect(){ playCrawl(); }
+
+  function startGame(){
+    const s=SHIPS[selectedShip];
+    score=0; lives=s.lives; combo=0; comboTimer=0;
+    bullets=[]; enemies=[]; hazards=[]; particles=[];
+    spawnTimer=0; gameTime=0; invuln=60;
+    shotsFired=0; irregularKilled=0;
+    player.speed=s.speed;
+    // dimensions de rendu selon l'image du vaisseau
+    const img=shipImgs[selectedShip];
+    const targetH=60; const ratio=(img&&img.height)?img.naturalWidth/img.naturalHeight:0.5;
+    player.dh=targetH; player.dw=targetH*(ratio||0.5);
+    player.hw=Math.max(12,player.dw*0.34); player.hh=Math.max(14,player.dh*0.34);
+    player.x=W/2; player.y=H-90; player.cooldown=0;
+    state=STATE.PLAY; show(null); setHUD(true); updateHUD(); audio();
+  }
+
+  function gameOver(){
+    state=STATE.OVER; setHUD(false);
+    const acc = shotsFired ? Math.round(irregularKilled/shotsFired*100) : 0;
+    document.getElementById("over-score").textContent=score;
+    document.getElementById("over-acc").textContent=acc+"%";
+    const best=getScores();
+    const isRecord = best.length<10 || score>best[best.length-1].score;
+    document.getElementById("over-name-wrap").style.display=(isRecord && score>0)?"block":"none";
+    document.getElementById("over-best").textContent=best.length?("Record : "+best[0].score):"";
+    show("over");
+    if (isRecord && score>0) setTimeout(()=>document.getElementById("over-name").focus(),100);
+    beep(220,0.6,"triangle",0.08);
+  }
+
+  /* ================= SCORES ================= */
+  const LS_KEY="verbblaster_scores_v1";
+  function getScores(){ try{ return JSON.parse(localStorage.getItem(LS_KEY))||[]; }catch(e){ return []; } }
+  function saveScore(name,sc){
+    const list=getScores();
+    list.push({ name:(name||"AAA").toUpperCase().slice(0,6), score:sc });
+    list.sort((a,b)=>b.score-a.score);
+    const top=list.slice(0,10);
+    try{ localStorage.setItem(LS_KEY,JSON.stringify(top)); }catch(e){}
+    return top;
+  }
+  function renderScores(highlight){
+    const list=getScores(); const el=document.getElementById("scores-list");
+    if (!list.length){ el.innerHTML='<div class="row"><span style="color:#888">Aucun score… sois le premier !</span></div>'; return; }
+    el.innerHTML=list.map((r,i)=>{
+      const me=(highlight&&r.name===highlight)?" me":"";
+      return `<div class="row${me}"><span class="rank">${String(i+1).padStart(2,"0")}.&nbsp;${r.name}</span><span>${r.score}</span></div>`;
+    }).join("");
+  }
+
+  /* ================= CRAWL ================= */
+  let crawlTimer=null;
+  function playCrawl(){
+    state=STATE.CRAWL; show(null);
+    const wrap=document.getElementById("crawl-wrap"); wrap.classList.add("active");
+    const c=document.getElementById("crawl"); c.style.animation="none"; void c.offsetWidth; c.style.animation="";
+    audio(); crawlTimer=setTimeout(endCrawl,11000);
+  }
+  function endCrawl(){ clearTimeout(crawlTimer); document.getElementById("crawl-wrap").classList.remove("active"); startGame(); }
+
+  /* ================= BOUTONS ================= */
+  document.getElementById("btn-play").addEventListener("click", openSelect);
+  document.getElementById("btn-launch").addEventListener("click", launchFromSelect);
+  document.getElementById("btn-select-back").addEventListener("click", ()=>{ state=STATE.MENU; show("screen-menu"); });
+  document.getElementById("skip").addEventListener("click", endCrawl);
+  document.getElementById("btn-scores").addEventListener("click", ()=>{ renderScores(); show("screen-scores"); });
+  document.getElementById("btn-scores-back").addEventListener("click", ()=>show("screen-menu"));
+  document.getElementById("btn-credits").addEventListener("click", ()=>show("screen-credits"));
+  document.getElementById("btn-credits-back").addEventListener("click", ()=>show("screen-menu"));
+  document.getElementById("btn-retry").addEventListener("click", ()=>{ handleRecordSave(); playCrawl(); });
+  document.getElementById("btn-change").addEventListener("click", ()=>{ handleRecordSave(); openSelect(); });
+  document.getElementById("btn-menu").addEventListener("click", ()=>{ handleRecordSave(); state=STATE.MENU; show("screen-menu"); });
+
+  document.getElementById("hint-toggle").addEventListener("click", ()=>{
+    colorHints=!colorHints; document.getElementById("hint-state").textContent=colorHints?"ON":"OFF";
+  });
+
+  function handleRecordSave(){
+    const wrap=document.getElementById("over-name-wrap");
+    if (wrap.style.display!=="none"){
+      const name=document.getElementById("over-name").value.trim()||"AAA";
+      saveScore(name,score); wrap.style.display="none";
+    }
+  }
+  document.getElementById("over-name").addEventListener("keydown",(e)=>{
+    if (e.key==="Enter"){ handleRecordSave(); renderScores(); show("screen-scores"); }
+  });
+  window.addEventListener("keydown",(e)=>{
+    if (e.key==="Escape"){
+      if (state===STATE.PLAY){ state=STATE.MENU; setHUD(false); show("screen-menu"); }
+      else if (state===STATE.CRAWL) endCrawl();
+      else if (state===STATE.SELECT){ state=STATE.MENU; show("screen-menu"); }
+    }
+  });
+
+  loop();
+})();
+</script>
+</body>
+</html>
