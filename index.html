@@ -83,7 +83,13 @@
   #hud.active { display:flex; }
   #hud .lives { color: var(--red); letter-spacing:0.1em; }
   #hud .score { color: var(--gold); }
-  #hud .combo { color: var(--cyan); font-size:0.8em; }
+  #hud .combo-wrap { display:flex; flex-direction:column; align-items:flex-end; gap:5px; min-width:130px; }
+  #hud .combo { color: var(--cyan); font-size:0.8em; text-shadow:0 0 8px rgba(79,214,255,0.6); }
+  #hud .combo-bar { width:130px; height:9px; background:rgba(255,255,255,0.10); border:1px solid #2a4a55;
+    border-radius:5px; overflow:hidden; opacity:0; transition:opacity 0.25s ease; }
+  #hud .combo-bar.on { opacity:1; }
+  #hud .combo-bar > i { display:block; height:100%; width:100%; transform-origin:left center;
+    background:linear-gradient(90deg, var(--cyan), var(--gold)); box-shadow:0 0 8px rgba(79,214,255,0.5); }
   #flash {
     position:absolute; top:18%; left:50%; transform:translateX(-50%); font-family:'Orbitron';
     font-weight:900; font-size: 2.6rem; z-index:9; pointer-events:none;
@@ -93,7 +99,7 @@
   /* ---------- Crawl ---------- */
   #crawl-wrap { position:absolute; inset:0; display:none; z-index:11; align-items:flex-end; justify-content:center; perspective: 320px; overflow:hidden; }
   #crawl-wrap.active { display:flex; }
-  #crawl { width: 720px; color: var(--gold); font-family:'Orbitron', sans-serif; font-weight:700; text-align:center; transform-origin: 50% 100%; transform: rotateX(28deg); animation: crawl 20s linear forwards; }
+  #crawl { width: 720px; color: var(--gold); font-family:'Orbitron', sans-serif; font-weight:700; text-align:center; transform-origin: 50% 100%; transform: rotateX(28deg); animation: crawl 28s linear forwards; }
   #crawl h3 { font-size: 2.2rem; letter-spacing:0.2em; margin-bottom:1.2rem; }
   #crawl p { font-size: 1.5rem; line-height:1.6; margin-bottom:1rem; }
   @keyframes crawl {
@@ -158,7 +164,10 @@
   <div id="hud">
     <div class="lives" id="hud-lives">♥ ♥ ♥</div>
     <div class="score">SCORE <span id="hud-score">0</span></div>
-    <div class="combo" id="hud-combo"></div>
+    <div class="combo-wrap" id="hud-combo-wrap">
+      <div class="combo" id="hud-combo"></div>
+      <div class="combo-bar"><i id="hud-combo-bar"></i></div>
+    </div>
   </div>
   <div id="flash"></div>
 
@@ -322,9 +331,10 @@
   const STATE = { MENU:"menu", SELECT:"select", CRAWL:"crawl", PLAY:"play", OVER:"over" };
   let state = STATE.MENU;
 
-  const player = { x:0, y:0, dw:54, dh:54, hw:18, hh:20, speed:7, cooldown:0 };
+  const player = { x:0, y:0, vx:0, vy:0, dw:54, dh:54, hw:18, hh:20, speed:7, cooldown:0 };
   let bullets=[], enemies=[], hazards=[], particles=[];
   let score=0, lives=3, combo=0, comboTimer=0;
+  const COMBO_TIME=330;   // ~5.5 s avant de perdre un cran de combo
   let spawnTimer=0, spawnDelay=80, gameTime=0;
   let shotsFired=0, irregularKilled=0, invuln=0;
 
@@ -417,14 +427,23 @@
 
     if (player.cooldown>0) player.cooldown--;
     if (invuln>0) invuln--;
-    if (comboTimer>0){ comboTimer--; if(comboTimer===0) combo=0; }
+    // combo degressif : a l'expiration on perd un seul cran (x5 -> x4 -> ...), pas tout
+    if (comboTimer>0){ comboTimer--; if(comboTimer===0 && combo>0){ combo--; if(combo>0) comboTimer=COMBO_TIME; } }
 
     let dx=0,dy=0;
     if (keys["arrowleft"]||keys["q"]||keys["a"]) dx-=1;
     if (keys["arrowright"]||keys["d"]) dx+=1;
     if (keys["arrowup"]||keys["z"]||keys["w"]) dy-=1;
     if (keys["arrowdown"]||keys["s"]) dy+=1;
-    player.x += dx*player.speed; player.y += dy*player.speed;
+    // normalise la diagonale pour une vitesse constante dans toutes les directions
+    if (dx && dy){ const inv=0.7071; dx*=inv; dy*=inv; }
+    // inertie : la vitesse rejoint progressivement la cible -> demarrages/arrets souples
+    const SMOOTH=0.22;
+    player.vx += (dx*player.speed - player.vx)*SMOOTH;
+    player.vy += (dy*player.speed - player.vy)*SMOOTH;
+    if (Math.abs(player.vx)<0.05) player.vx=0;
+    if (Math.abs(player.vy)<0.05) player.vy=0;
+    player.x += player.vx; player.y += player.vy;
     player.x = Math.max(player.dw/2, Math.min(W-player.dw/2, player.x));
     player.y = Math.max(H*0.42, Math.min(H-player.dh/2-10, player.y));
 
@@ -445,7 +464,7 @@
         if (Math.abs(b.x-e.x) < e.w*0.42+b.r && Math.abs(b.y-e.y) < e.h*0.42+b.r){
           b.dead=true; e.hit=true;
           if (e.irregular){
-            combo++; comboTimer=180; const gain=100+(combo-1)*20;
+            combo++; comboTimer=COMBO_TIME; const gain=100+(combo-1)*20;
             addScore(gain); irregularKilled++;
             explode(e.x,e.y,"#ffe81f",18); beep(660+combo*40,0.12,"square",0.06);
             if (combo>=3) flash("COMBO x"+combo+"  +"+gain,"#4fd6ff");
@@ -560,6 +579,14 @@
     document.getElementById("hud-score").textContent=score;
     document.getElementById("hud-lives").textContent = lives>0 ? ("♥ ".repeat(lives).trim()) : "—";
     document.getElementById("hud-combo").textContent = combo>=2 ? ("COMBO x"+combo) : "";
+    const bar=document.getElementById("hud-combo-bar");
+    const barWrap=bar.parentElement;
+    if (combo>=2){
+      barWrap.classList.add("on");
+      bar.style.transform = "scaleX("+(comboTimer/COMBO_TIME)+")";
+    } else {
+      barWrap.classList.remove("on");
+    }
   }
 
   /* ================= ÉCRANS ================= */
@@ -608,7 +635,7 @@
     const targetH=60; const ratio=(img&&img.height)?img.naturalWidth/img.naturalHeight:0.5;
     player.dh=targetH; player.dw=targetH*(ratio||0.5);
     player.hw=Math.max(12,player.dw*0.34); player.hh=Math.max(14,player.dh*0.34);
-    player.x=W/2; player.y=H-90; player.cooldown=0;
+    player.x=W/2; player.y=H-90; player.vx=0; player.vy=0; player.cooldown=0;
     state=STATE.PLAY; show(null); setHUD(true); updateHUD(); audio();
   }
 
@@ -652,7 +679,7 @@
     state=STATE.CRAWL; show(null);
     const wrap=document.getElementById("crawl-wrap"); wrap.classList.add("active");
     const c=document.getElementById("crawl"); c.style.animation="none"; void c.offsetWidth; c.style.animation="";
-    audio(); crawlTimer=setTimeout(endCrawl,20000);
+    audio(); crawlTimer=setTimeout(endCrawl,28000);
   }
   function endCrawl(){ clearTimeout(crawlTimer); document.getElementById("crawl-wrap").classList.remove("active"); startGame(); }
 
