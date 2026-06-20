@@ -38,28 +38,19 @@ def background_mask(rgb):
         seed = dilate(seed) & bright
     return seed  # True = fond à rendre transparent
 
-def largest_component(fg):
-    """Garde uniquement la plus grande composante connexe (4-connexite) du
-    masque avant-plan. Sert a eliminer les bouts de vaisseaux voisins qui
-    debordent dans la cellule decoupee (rangee du bas surtout)."""
-    H, Wd = fg.shape
-    idx = np.arange(H*Wd, dtype=np.int64).reshape(H, Wd)
-    lab = np.where(fg, idx, -1)
-    changed = True
-    while changed:
-        changed = False
-        cur = lab.copy()
-        cur[1:, :]  = np.where((lab[1:,:]>=0)&(lab[:-1,:]>=0), np.minimum(lab[1:,:], lab[:-1,:]), lab[1:,:])
-        cur[:-1, :] = np.where((cur[:-1,:]>=0)&(cur[1:,:]>=0), np.minimum(cur[:-1,:], cur[1:,:]), cur[:-1,:])
-        cur[:, 1:]  = np.where((cur[:,1:]>=0)&(cur[:,:-1]>=0), np.minimum(cur[:,1:], cur[:,:-1]), cur[:,1:])
-        cur[:, :-1] = np.where((cur[:,:-1]>=0)&(cur[:,1:]>=0), np.minimum(cur[:,:-1], cur[:,1:]), cur[:,:-1])
-        if not np.array_equal(cur, lab):
-            changed = True; lab = cur
-    labels, counts = np.unique(lab[lab >= 0], return_counts=True)
-    if len(labels) == 0:
-        return fg
-    keep = labels[np.argmax(counts)]
-    return lab == keep
+def runs_of_true(mask1d, min_len):
+    """Segments (start, end inclus) de valeurs True d'au moins min_len pixels.
+    Sert a localiser rangees et vaisseaux d'apres les bandes vides reelles."""
+    res = []; s = None
+    for i, v in enumerate(mask1d):
+        if v and s is None:
+            s = i
+        elif not v and s is not None:
+            if i - s >= min_len: res.append((s, i-1))
+            s = None
+    if s is not None and len(mask1d) - s >= min_len:
+        res.append((s, len(mask1d)-1))
+    return res
 
 def to_rgba(rgb, bg):
     h, w = bg.shape
@@ -91,20 +82,21 @@ def to_uri(img):
     img.save(buf, "PNG", optimize=True)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
-# ---------------- VAISSEAUX : grille 4x2, détourage par cellule ----------------
+# ---------------- VAISSEAUX : segmentation par projection (gere les debordements) -
+# Plutot qu'une grille 4x2 rigide (qui coupe les vaisseaux dont les ailes debordent
+# de leur quart), on detoure globalement puis on decoupe d'apres les vraies bandes
+# vides entre vaisseaux : 2 rangees, puis 4 colonnes par rangee.
 ships_rgb = load("ships.png")
-cw, ch = WORK//4, WORK//2
+ship_bg = background_mask(ships_rgb)
+ship_full = to_rgba(ships_rgb, ship_bg)
+ship_fg = ~ship_bg
 ships = []
-for r in range(2):
-    for c in range(4):
-        cell = ships_rgb[r*ch:(r+1)*ch, c*cw:(c+1)*cw]
-        bg = background_mask(cell)
-        # ne conserve que le vaisseau central : retire les fragments des voisins
-        # qui debordent par-dessus la limite de cellule
-        fg = largest_component(~bg)
-        bg = ~fg
-        img = trim(to_rgba(cell, bg))
-        img = downscale(img, 230)
+row_bands = runs_of_true(ship_fg.sum(axis=1) > 0, 40)     # rangees (haut -> bas)
+for (y0, y1) in row_bands:
+    band = ship_fg[y0:y1+1]
+    col_bands = runs_of_true(band.sum(axis=0) > 0, 40)    # vaisseaux (gauche -> droite)
+    for (x0, x1) in col_bands:
+        img = downscale(trim(ship_full.crop((x0, y0, x1+1, y1+1))), 230)
         ships.append({"uri": to_uri(img), "w": img.width, "h": img.height})
         print(f"ship {len(ships)-1}: {img.width}x{img.height}")
 
