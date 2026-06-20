@@ -93,7 +93,7 @@
   /* ---------- Crawl ---------- */
   #crawl-wrap { position:absolute; inset:0; display:none; z-index:11; align-items:flex-end; justify-content:center; perspective: 320px; overflow:hidden; }
   #crawl-wrap.active { display:flex; }
-  #crawl { width: 720px; color: var(--gold); font-family:'Orbitron', sans-serif; font-weight:700; text-align:center; transform-origin: 50% 100%; transform: rotateX(28deg); animation: crawl 11s linear forwards; }
+  #crawl { width: 720px; color: var(--gold); font-family:'Orbitron', sans-serif; font-weight:700; text-align:center; transform-origin: 50% 100%; transform: rotateX(28deg); animation: crawl 20s linear forwards; }
   #crawl h3 { font-size: 2.2rem; letter-spacing:0.2em; margin-bottom:1.2rem; }
   #crawl p { font-size: 1.5rem; line-height:1.6; margin-bottom:1rem; }
   @keyframes crawl {
@@ -652,7 +652,7 @@
     state=STATE.CRAWL; show(null);
     const wrap=document.getElementById("crawl-wrap"); wrap.classList.add("active");
     const c=document.getElementById("crawl"); c.style.animation="none"; void c.offsetWidth; c.style.animation="";
-    audio(); crawlTimer=setTimeout(endCrawl,11000);
+    audio(); crawlTimer=setTimeout(endCrawl,20000);
   }
   function endCrawl(){ clearTimeout(crawlTimer); document.getElementById("crawl-wrap").classList.remove("active"); startGame(); }
 

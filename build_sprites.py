@@ -38,6 +38,29 @@ def background_mask(rgb):
         seed = dilate(seed) & bright
     return seed  # True = fond à rendre transparent
 
+def largest_component(fg):
+    """Garde uniquement la plus grande composante connexe (4-connexite) du
+    masque avant-plan. Sert a eliminer les bouts de vaisseaux voisins qui
+    debordent dans la cellule decoupee (rangee du bas surtout)."""
+    H, Wd = fg.shape
+    idx = np.arange(H*Wd, dtype=np.int64).reshape(H, Wd)
+    lab = np.where(fg, idx, -1)
+    changed = True
+    while changed:
+        changed = False
+        cur = lab.copy()
+        cur[1:, :]  = np.where((lab[1:,:]>=0)&(lab[:-1,:]>=0), np.minimum(lab[1:,:], lab[:-1,:]), lab[1:,:])
+        cur[:-1, :] = np.where((cur[:-1,:]>=0)&(cur[1:,:]>=0), np.minimum(cur[:-1,:], cur[1:,:]), cur[:-1,:])
+        cur[:, 1:]  = np.where((cur[:,1:]>=0)&(cur[:,:-1]>=0), np.minimum(cur[:,1:], cur[:,:-1]), cur[:,1:])
+        cur[:, :-1] = np.where((cur[:,:-1]>=0)&(cur[:,1:]>=0), np.minimum(cur[:,:-1], cur[:,1:]), cur[:,:-1])
+        if not np.array_equal(cur, lab):
+            changed = True; lab = cur
+    labels, counts = np.unique(lab[lab >= 0], return_counts=True)
+    if len(labels) == 0:
+        return fg
+    keep = labels[np.argmax(counts)]
+    return lab == keep
+
 def to_rgba(rgb, bg):
     h, w = bg.shape
     alpha = np.where(bg, 0, 255).astype(np.uint8)
@@ -76,6 +99,10 @@ for r in range(2):
     for c in range(4):
         cell = ships_rgb[r*ch:(r+1)*ch, c*cw:(c+1)*cw]
         bg = background_mask(cell)
+        # ne conserve que le vaisseau central : retire les fragments des voisins
+        # qui debordent par-dessus la limite de cellule
+        fg = largest_component(~bg)
+        bg = ~fg
         img = trim(to_rgba(cell, bg))
         img = downscale(img, 230)
         ships.append({"uri": to_uri(img), "w": img.width, "h": img.height})
